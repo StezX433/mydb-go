@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"fmt"
 	"os"
 )
 
@@ -31,9 +32,17 @@ func (p *Pager) ReadPage(id PageID) (*Page, error) {
 
 	offset := int64(id) * int64(PageSize)
 
-	_, err := p.file.ReadAt(page.Data[:], offset)
+	n, err := p.file.ReadAt(page.Data[:], offset)
 	if err != nil {
 		return nil, err
+	}
+
+	if n != PageSize {
+		return nil, fmt.Errorf(
+			"could not read complete page: got %d bytes, expected %d",
+			n,
+			PageSize,
+		)
 	}
 
 	return page, nil
@@ -42,9 +51,20 @@ func (p *Pager) ReadPage(id PageID) (*Page, error) {
 func (p *Pager) WritePage(page *Page) error {
 	offset := int64(page.ID) * int64(PageSize)
 
-	_, err := p.file.WriteAt(page.Data[:], offset)
+	n, err := p.file.WriteAt(page.Data[:], offset)
+	if err != nil {
+		return err
+	}
 
-	return err
+	if n != PageSize {
+		return fmt.Errorf(
+			"could not write complete page: wrote %d bytes, expected %d",
+			n,
+			PageSize,
+		)
+	}
+
+	return nil
 }
 
 func (p *Pager) NumPages() (uint32, error) {
@@ -54,6 +74,14 @@ func (p *Pager) NumPages() (uint32, error) {
 	}
 
 	fileSize := info.Size()
+
+	if fileSize%int64(PageSize) != 0 {
+		return 0, fmt.Errorf(
+			"database file is corrupted: size %d is not a multiple of page size %d",
+			fileSize,
+			PageSize,
+		)
+	}
 
 	return uint32(fileSize / int64(PageSize)), nil
 }

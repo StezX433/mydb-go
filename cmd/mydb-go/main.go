@@ -14,7 +14,6 @@ func main() {
 	}
 	defer pager.Close()
 
-	// Check current number of pages
 	numPages, err := pager.NumPages()
 	if err != nil {
 		log.Fatal(err)
@@ -22,7 +21,6 @@ func main() {
 
 	fmt.Println("Current pages:", numPages)
 
-	// Allocate a new page
 	page, err := pager.AllocatePage()
 	if err != nil {
 		log.Fatal(err)
@@ -30,10 +28,8 @@ func main() {
 
 	fmt.Println("Allocated page:", page.ID)
 
-	// Put some data into it
 	page.Data[0] = 200
 
-	// Write it to disk
 	err = pager.WritePage(page)
 	if err != nil {
 		log.Fatal(err)
@@ -41,7 +37,6 @@ func main() {
 
 	fmt.Println("Page written successfully")
 
-	// Check number of pages again
 	numPages, err = pager.NumPages()
 	if err != nil {
 		log.Fatal(err)
