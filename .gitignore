@@ -1,0 +1,11 @@
+# Generated database files
+*.db
+*.db-journal
+*.wal
+*.log
+
+# Temporary Word files
+~$*
+
+# Go build output
+/bin/
