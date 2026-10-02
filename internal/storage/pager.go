@@ -92,11 +92,7 @@ func (p *Pager) AllocatePage() (*Page, error) {
 		return nil, err
 	}
 
-	page := &Page{
-		ID: PageID(numPages),
-	}
-
-	return page, nil
+	return NewPage(PageID(numPages)), nil
 }
 
 func (p *Pager) Close() error {

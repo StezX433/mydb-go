@@ -14,33 +14,20 @@ func main() {
 	}
 	defer pager.Close()
 
-	numPages, err := pager.NumPages()
+	// Read the page we previously wrote.
+	page, err := pager.ReadPage(5)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println("Current pages:", numPages)
-
-	page, err := pager.AllocatePage()
+	// Read the record from the page.
+	r, err := page.GetRecord(0)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println("Allocated page:", page.ID)
-
-	page.Data[0] = 200
-
-	err = pager.WritePage(page)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println("Page written successfully")
-
-	numPages, err = pager.NumPages()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println("Pages after write:", numPages)
+	fmt.Println("Record read successfully")
+	fmt.Println("ID:", r.ID)
+	fmt.Println("Age:", r.Age)
+	fmt.Println("Name:", string(r.Name[:]))
 }
