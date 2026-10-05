@@ -14,8 +14,14 @@ const (
 const MaxKeys = 4
 
 type Node struct {
-	Type     NodeType
-	Keys     []Key
-	Values   []storage.RecordID
-	Children []*Node
+	Type NodeType
+
+	Keys   []Key
+	Values []storage.RecordID
+
+	Children       []*Node
+	ChildrenPageID []storage.PageID
+
+	PageID   storage.PageID
+	NextLeaf storage.PageID
 }
