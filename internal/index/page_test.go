@@ -16,6 +16,7 @@ func TestNodeSerialization(t *testing.T) {
 			{PageID: 3, SlotID: 4},
 			{PageID: 5, SlotID: 6},
 		},
+		NextLeaf: 20,
 	}
 
 	page := SerializeNode(node)
@@ -59,6 +60,14 @@ func TestNodeSerialization(t *testing.T) {
 				i,
 			)
 		}
+	}
+
+	if decoded.NextLeaf != node.NextLeaf {
+		t.Fatalf(
+			"NextLeaf mismatch: expected %d, got %d",
+			node.NextLeaf,
+			decoded.NextLeaf,
+		)
 	}
 }
 

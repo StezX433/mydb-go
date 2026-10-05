@@ -10,7 +10,7 @@ import (
 const (
 	indexMagic uint32 = 0x42505431
 
-	indexHeaderSize = 12
+	indexHeaderSize = 8
 	keySize         = 4
 	pageIDSize      = 4
 )
@@ -31,13 +31,6 @@ func SerializeNode(node *Node) *storage.Page {
 		data[6:8],
 		uint16(len(node.Keys)),
 	)
-
-	if node.Type == LeafNode {
-		binary.LittleEndian.PutUint32(
-			data[8:12],
-			uint32(node.NextLeaf),
-		)
-	}
 
 	offset := indexHeaderSize
 
@@ -66,6 +59,11 @@ func SerializeNode(node *Node) *storage.Page {
 
 			offset += 2
 		}
+
+		binary.LittleEndian.PutUint32(
+			data[offset:offset+pageIDSize],
+			uint32(node.NextLeaf),
+		)
 	}
 
 	if node.Type == InternalNode {
@@ -105,12 +103,6 @@ func DeserializeNode(page *storage.Page) (*Node, error) {
 		PageID: page.ID,
 	}
 
-	if nodeType == LeafNode {
-		node.NextLeaf = storage.PageID(
-			binary.LittleEndian.Uint32(data[8:12]),
-		)
-	}
-
 	offset := indexHeaderSize
 
 	for i := 0; i < int(keyCount); i++ {
@@ -144,10 +136,16 @@ func DeserializeNode(page *storage.Page) (*Node, error) {
 				SlotID: slotID,
 			}
 		}
+
+		node.NextLeaf = storage.PageID(
+			binary.LittleEndian.Uint32(
+				data[offset : offset+pageIDSize],
+			),
+		)
 	}
 
 	if nodeType == InternalNode {
-		node.ChildrenPageID = make([]storage.PageID, keyCount+1)
+		node.ChildrenPageID = make([]storage.PageID, int(keyCount)+1)
 
 		for i := 0; i < int(keyCount)+1; i++ {
 			childPageID := binary.LittleEndian.Uint32(

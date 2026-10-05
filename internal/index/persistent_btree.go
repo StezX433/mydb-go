@@ -65,17 +65,90 @@ func (t *PersistentBTree) Insert(
 		return err
 	}
 
-	if root.Type == LeafNode {
-		insertIntoLeaf(root, key, rid)
-
-		if len(root.Keys) <= MaxKeys {
-			return t.store.WriteNode(root)
-		}
-
-		return t.splitRootLeaf(root)
+	split, err := t.insert(root, key, rid)
+	if err != nil {
+		return err
 	}
 
-	return t.insertIntoInternal(root, key, rid)
+	if split == nil {
+		return nil
+	}
+
+	newRoot := &Node{
+		Type:           InternalNode,
+		Keys:           []Key{split.separator},
+		ChildrenPageID: []storage.PageID{root.PageID, split.rightPageID},
+	}
+
+	newRootPageID, err := t.store.CreateNode(newRoot)
+	if err != nil {
+		return err
+	}
+
+	t.rootPageID = newRootPageID
+
+	return nil
+}
+
+type splitResult struct {
+	separator   Key
+	rightPageID storage.PageID
+}
+
+func (t *PersistentBTree) insert(
+	node *Node,
+	key Key,
+	rid storage.RecordID,
+) (*splitResult, error) {
+	if node.Type == LeafNode {
+		insertIntoLeaf(node, key, rid)
+
+		if len(node.Keys) <= MaxKeys {
+			return nil, t.store.WriteNode(node)
+		}
+
+		return t.splitLeaf(node)
+	}
+
+	pos := sort.Search(len(node.Keys), func(i int) bool {
+		return key < node.Keys[i]
+	})
+
+	childPageID := node.ChildrenPageID[pos]
+
+	child, err := t.store.ReadNode(childPageID)
+	if err != nil {
+		return nil, err
+	}
+
+	split, err := t.insert(child, key, rid)
+	if err != nil {
+		return nil, err
+	}
+
+	if split == nil {
+		return nil, nil
+	}
+
+	node.Keys = append(node.Keys, 0)
+	copy(
+		node.Keys[pos+1:],
+		node.Keys[pos:],
+	)
+	node.Keys[pos] = split.separator
+
+	node.ChildrenPageID = append(node.ChildrenPageID, 0)
+	copy(
+		node.ChildrenPageID[pos+2:],
+		node.ChildrenPageID[pos+1:],
+	)
+	node.ChildrenPageID[pos+1] = split.rightPageID
+
+	if len(node.Keys) <= MaxKeys {
+		return nil, t.store.WriteNode(node)
+	}
+
+	return t.splitInternal(node)
 }
 
 func insertIntoLeaf(
@@ -96,120 +169,69 @@ func insertIntoLeaf(
 	node.Values[pos] = rid
 }
 
-func (t *PersistentBTree) splitRootLeaf(root *Node) error {
-	mid := len(root.Keys) / 2
-
-	right := &Node{
-		Type:     LeafNode,
-		Keys:     append([]Key{}, root.Keys[mid:]...),
-		Values:   append([]storage.RecordID{}, root.Values[mid:]...),
-		NextLeaf: root.NextLeaf,
-	}
-
-	root.Keys = append([]Key{}, root.Keys[:mid]...)
-	root.Values = append([]storage.RecordID{}, root.Values[:mid]...)
-
-	rightPageID, err := t.store.CreateNode(right)
-	if err != nil {
-		return err
-	}
-
-	root.NextLeaf = rightPageID
-
-	if err := t.store.WriteNode(root); err != nil {
-		return err
-	}
-
-	newRoot := &Node{
-		Type:           InternalNode,
-		Keys:           []Key{right.Keys[0]},
-		ChildrenPageID: []storage.PageID{root.PageID, rightPageID},
-	}
-
-	newRootPageID, err := t.store.CreateNode(newRoot)
-	if err != nil {
-		return err
-	}
-
-	t.rootPageID = newRootPageID
-
-	return nil
-}
-
-func (t *PersistentBTree) insertIntoInternal(
+func (t *PersistentBTree) splitLeaf(
 	node *Node,
-	key Key,
-	rid storage.RecordID,
-) error {
-	pos := sort.Search(len(node.Keys), func(i int) bool {
-		return key < node.Keys[i]
-	})
-
-	childPageID := node.ChildrenPageID[pos]
-
-	child, err := t.store.ReadNode(childPageID)
-	if err != nil {
-		return err
-	}
-
-	if child.Type == LeafNode {
-		insertIntoLeaf(child, key, rid)
-
-		if len(child.Keys) <= MaxKeys {
-			return t.store.WriteNode(child)
-		}
-
-		return t.splitLeafChild(node, pos, child)
-	}
-
-	return nil
-}
-
-func (t *PersistentBTree) splitLeafChild(
-	parent *Node,
-	childIndex int,
-	child *Node,
-) error {
-	mid := len(child.Keys) / 2
+) (*splitResult, error) {
+	mid := len(node.Keys) / 2
 
 	right := &Node{
 		Type:     LeafNode,
-		Keys:     append([]Key{}, child.Keys[mid:]...),
-		Values:   append([]storage.RecordID{}, child.Values[mid:]...),
-		NextLeaf: child.NextLeaf,
+		Keys:     append([]Key{}, node.Keys[mid:]...),
+		Values:   append([]storage.RecordID{}, node.Values[mid:]...),
+		NextLeaf: node.NextLeaf,
 	}
 
-	child.Keys = append([]Key{}, child.Keys[:mid]...)
-	child.Values = append([]storage.RecordID{}, child.Values[:mid]...)
+	node.Keys = append([]Key{}, node.Keys[:mid]...)
+	node.Values = append([]storage.RecordID{}, node.Values[:mid]...)
 
 	rightPageID, err := t.store.CreateNode(right)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	child.NextLeaf = rightPageID
+	node.NextLeaf = rightPageID
 
-	if err := t.store.WriteNode(child); err != nil {
-		return err
+	if err := t.store.WriteNode(node); err != nil {
+		return nil, err
 	}
 
-	separator := right.Keys[0]
+	return &splitResult{
+		separator:   right.Keys[0],
+		rightPageID: rightPageID,
+	}, nil
+}
 
-	parent.Keys = append(parent.Keys, 0)
-	copy(
-		parent.Keys[childIndex+1:],
-		parent.Keys[childIndex:],
+func (t *PersistentBTree) splitInternal(
+	node *Node,
+) (*splitResult, error) {
+	mid := len(node.Keys) / 2
+	separator := node.Keys[mid]
+
+	right := &Node{
+		Type:           InternalNode,
+		Keys:           append([]Key{}, node.Keys[mid+1:]...),
+		ChildrenPageID: append([]storage.PageID{}, node.ChildrenPageID[mid+1:]...),
+	}
+
+	node.Keys = append([]Key{}, node.Keys[:mid]...)
+	node.ChildrenPageID = append(
+		[]storage.PageID{},
+		node.ChildrenPageID[:mid+1]...,
 	)
-	parent.Keys[childIndex] = separator
 
-	parent.ChildrenPageID = append(parent.ChildrenPageID, 0)
-	copy(
-		parent.ChildrenPageID[childIndex+2:],
-		parent.ChildrenPageID[childIndex+1:],
-	)
-	parent.ChildrenPageID[childIndex+1] = rightPageID
+	rightPageID, err := t.store.CreateNode(right)
+	if err != nil {
+		return nil, err
+	}
 
-	return t.store.WriteNode(parent)
+	if err := t.store.WriteNode(node); err != nil {
+		return nil, err
+	}
+
+	return &splitResult{
+		separator:   separator,
+		rightPageID: rightPageID,
+	}, nil
 }
 
 func (t *PersistentBTree) Search(
@@ -240,4 +262,58 @@ func (t *PersistentBTree) Search(
 	}
 
 	return storage.RecordID{}, false, nil
+}
+
+func (t *PersistentBTree) RangeScan(
+	startKey Key,
+	endKey Key,
+) ([]storage.RecordID, error) {
+	if startKey > endKey {
+		return []storage.RecordID{}, nil
+	}
+
+	node, err := t.Root()
+	if err != nil {
+		return nil, err
+	}
+
+	for node.Type == InternalNode {
+		pos := sort.Search(len(node.Keys), func(i int) bool {
+			return startKey < node.Keys[i]
+		})
+
+		node, err = t.store.ReadNode(node.ChildrenPageID[pos])
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	pos := sort.Search(len(node.Keys), func(i int) bool {
+		return node.Keys[i] >= startKey
+	})
+
+	var results []storage.RecordID
+
+	for {
+		for i := pos; i < len(node.Keys); i++ {
+			if node.Keys[i] > endKey {
+				return results, nil
+			}
+
+			results = append(results, node.Values[i])
+		}
+
+		if node.NextLeaf == 0 {
+			break
+		}
+
+		node, err = t.store.ReadNode(node.NextLeaf)
+		if err != nil {
+			return nil, err
+		}
+
+		pos = 0
+	}
+
+	return results, nil
 }
