@@ -11,7 +11,10 @@ const (
 	InternalNode
 )
 
-const MaxKeys = 4
+const (
+	MaxKeys = 4
+	MinKeys = 2
+)
 
 type Node struct {
 	Type NodeType

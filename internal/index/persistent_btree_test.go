@@ -378,55 +378,13 @@ func TestPersistentBTreeRangeScan(t *testing.T) {
 		key Key
 		rid storage.RecordID
 	}{
-		{
-			key: 10,
-			rid: storage.RecordID{
-				PageID: 1,
-				SlotID: 0,
-			},
-		},
-		{
-			key: 20,
-			rid: storage.RecordID{
-				PageID: 2,
-				SlotID: 1,
-			},
-		},
-		{
-			key: 30,
-			rid: storage.RecordID{
-				PageID: 3,
-				SlotID: 2,
-			},
-		},
-		{
-			key: 40,
-			rid: storage.RecordID{
-				PageID: 4,
-				SlotID: 3,
-			},
-		},
-		{
-			key: 50,
-			rid: storage.RecordID{
-				PageID: 5,
-				SlotID: 4,
-			},
-		},
-		{
-			key: 60,
-			rid: storage.RecordID{
-				PageID: 6,
-				SlotID: 5,
-			},
-		},
-		{
-			key: 70,
-			rid: storage.RecordID{
-				PageID: 7,
-				SlotID: 6,
-			},
-		},
+		{10, storage.RecordID{PageID: 1, SlotID: 0}},
+		{20, storage.RecordID{PageID: 2, SlotID: 1}},
+		{30, storage.RecordID{PageID: 3, SlotID: 2}},
+		{40, storage.RecordID{PageID: 4, SlotID: 3}},
+		{50, storage.RecordID{PageID: 5, SlotID: 4}},
+		{60, storage.RecordID{PageID: 6, SlotID: 5}},
+		{70, storage.RecordID{PageID: 7, SlotID: 6}},
 	}
 
 	for _, record := range records {
@@ -443,26 +401,11 @@ func TestPersistentBTreeRangeScan(t *testing.T) {
 	}
 
 	expected := []storage.RecordID{
-		{
-			PageID: 2,
-			SlotID: 1,
-		},
-		{
-			PageID: 3,
-			SlotID: 2,
-		},
-		{
-			PageID: 4,
-			SlotID: 3,
-		},
-		{
-			PageID: 5,
-			SlotID: 4,
-		},
-		{
-			PageID: 6,
-			SlotID: 5,
-		},
+		{PageID: 2, SlotID: 1},
+		{PageID: 3, SlotID: 2},
+		{PageID: 4, SlotID: 3},
+		{PageID: 5, SlotID: 4},
+		{PageID: 6, SlotID: 5},
 	}
 
 	if len(results) != len(expected) {
@@ -511,69 +454,15 @@ func TestPersistentBTreeValidation(t *testing.T) {
 		key Key
 		rid storage.RecordID
 	}{
-		{
-			key: 10,
-			rid: storage.RecordID{
-				PageID: 1,
-				SlotID: 0,
-			},
-		},
-		{
-			key: 20,
-			rid: storage.RecordID{
-				PageID: 2,
-				SlotID: 1,
-			},
-		},
-		{
-			key: 30,
-			rid: storage.RecordID{
-				PageID: 3,
-				SlotID: 2,
-			},
-		},
-		{
-			key: 40,
-			rid: storage.RecordID{
-				PageID: 4,
-				SlotID: 3,
-			},
-		},
-		{
-			key: 50,
-			rid: storage.RecordID{
-				PageID: 5,
-				SlotID: 4,
-			},
-		},
-		{
-			key: 60,
-			rid: storage.RecordID{
-				PageID: 6,
-				SlotID: 5,
-			},
-		},
-		{
-			key: 70,
-			rid: storage.RecordID{
-				PageID: 7,
-				SlotID: 6,
-			},
-		},
-		{
-			key: 80,
-			rid: storage.RecordID{
-				PageID: 8,
-				SlotID: 7,
-			},
-		},
-		{
-			key: 90,
-			rid: storage.RecordID{
-				PageID: 9,
-				SlotID: 8,
-			},
-		},
+		{10, storage.RecordID{PageID: 1, SlotID: 0}},
+		{20, storage.RecordID{PageID: 2, SlotID: 1}},
+		{30, storage.RecordID{PageID: 3, SlotID: 2}},
+		{40, storage.RecordID{PageID: 4, SlotID: 3}},
+		{50, storage.RecordID{PageID: 5, SlotID: 4}},
+		{60, storage.RecordID{PageID: 6, SlotID: 5}},
+		{70, storage.RecordID{PageID: 7, SlotID: 6}},
+		{80, storage.RecordID{PageID: 8, SlotID: 7}},
+		{90, storage.RecordID{PageID: 9, SlotID: 8}},
 	}
 
 	for _, record := range records {
@@ -586,6 +475,526 @@ func TestPersistentBTreeValidation(t *testing.T) {
 	if err := tree.Validate(); err != nil {
 		pager.Close()
 		t.Fatalf("tree validation failed: %v", err)
+	}
+
+	if err := pager.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPersistentBTreeDeleteWithoutRebalance(t *testing.T) {
+	filename := "test_persistent_btree_delete_simple.db"
+
+	defer os.Remove(filename)
+
+	pager, err := storage.NewPager(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tree, err := NewPersistentBTree(pager)
+	if err != nil {
+		pager.Close()
+		t.Fatal(err)
+	}
+
+	for i := 1; i <= 5; i++ {
+		key := Key(i * 10)
+
+		if err := tree.Insert(
+			key,
+			storage.RecordID{
+				PageID: storage.PageID(i),
+				SlotID: uint16(i),
+			},
+		); err != nil {
+			pager.Close()
+			t.Fatal(err)
+		}
+	}
+
+	if err := tree.Delete(40); err != nil {
+		pager.Close()
+		t.Fatal(err)
+	}
+
+	_, found, err := tree.Search(40)
+	if err != nil {
+		pager.Close()
+		t.Fatal(err)
+	}
+
+	if found {
+		pager.Close()
+		t.Fatalf("expected key 40 to be deleted")
+	}
+
+	for _, key := range []Key{10, 20, 30, 50} {
+		_, found, err := tree.Search(key)
+		if err != nil {
+			pager.Close()
+			t.Fatal(err)
+		}
+
+		if !found {
+			pager.Close()
+			t.Fatalf(
+				"expected key %d to remain",
+				key,
+			)
+		}
+	}
+
+	if err := tree.Validate(); err != nil {
+		pager.Close()
+		t.Fatalf(
+			"tree validation failed after deletion: %v",
+			err,
+		)
+	}
+
+	if err := pager.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPersistentBTreeDeleteBorrowFromRight(t *testing.T) {
+	filename := "test_persistent_btree_delete_borrow_right.db"
+
+	defer os.Remove(filename)
+
+	pager, err := storage.NewPager(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tree, err := NewPersistentBTree(pager)
+	if err != nil {
+		pager.Close()
+		t.Fatal(err)
+	}
+
+	for i := 1; i <= 5; i++ {
+		key := Key(i * 10)
+
+		if err := tree.Insert(
+			key,
+			storage.RecordID{
+				PageID: storage.PageID(i),
+				SlotID: uint16(i),
+			},
+		); err != nil {
+			pager.Close()
+			t.Fatal(err)
+		}
+	}
+
+	if err := tree.Delete(20); err != nil {
+		pager.Close()
+		t.Fatal(err)
+	}
+
+	root, err := tree.Root()
+	if err != nil {
+		pager.Close()
+		t.Fatal(err)
+	}
+
+	if root.Type != InternalNode {
+		pager.Close()
+		t.Fatalf("expected internal root")
+	}
+
+	if len(root.Keys) != 1 {
+		pager.Close()
+		t.Fatalf(
+			"expected 1 separator key, got %d",
+			len(root.Keys),
+		)
+	}
+
+	if root.Keys[0] != 40 {
+		pager.Close()
+		t.Fatalf(
+			"expected separator 40 after redistribution, got %d",
+			root.Keys[0],
+		)
+	}
+
+	left, err := tree.store.ReadNode(
+		root.ChildrenPageID[0],
+	)
+	if err != nil {
+		pager.Close()
+		t.Fatal(err)
+	}
+
+	right, err := tree.store.ReadNode(
+		root.ChildrenPageID[1],
+	)
+	if err != nil {
+		pager.Close()
+		t.Fatal(err)
+	}
+
+	expectedLeft := []Key{10, 30}
+	expectedRight := []Key{40, 50}
+
+	if len(left.Keys) != len(expectedLeft) {
+		pager.Close()
+		t.Fatalf(
+			"expected left leaf to have %d keys, got %d",
+			len(expectedLeft),
+			len(left.Keys),
+		)
+	}
+
+	if len(right.Keys) != len(expectedRight) {
+		pager.Close()
+		t.Fatalf(
+			"expected right leaf to have %d keys, got %d",
+			len(expectedRight),
+			len(right.Keys),
+		)
+	}
+
+	for i := range expectedLeft {
+		if left.Keys[i] != expectedLeft[i] {
+			pager.Close()
+			t.Fatalf(
+				"left key %d: expected %d, got %d",
+				i,
+				expectedLeft[i],
+				left.Keys[i],
+			)
+		}
+	}
+
+	for i := range expectedRight {
+		if right.Keys[i] != expectedRight[i] {
+			pager.Close()
+			t.Fatalf(
+				"right key %d: expected %d, got %d",
+				i,
+				expectedRight[i],
+				right.Keys[i],
+			)
+		}
+	}
+
+	if err := tree.Validate(); err != nil {
+		pager.Close()
+		t.Fatalf(
+			"tree validation failed after redistribution: %v",
+			err,
+		)
+	}
+
+	if err := pager.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPersistentBTreeDeleteBorrowFromLeft(t *testing.T) {
+	filename := "test_persistent_btree_delete_borrow_left.db"
+
+	defer os.Remove(filename)
+
+	pager, err := storage.NewPager(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tree, err := NewPersistentBTree(pager)
+	if err != nil {
+		pager.Close()
+		t.Fatal(err)
+	}
+
+	keys := []Key{10, 20, 25, 30, 40, 50, 60, 70}
+
+	for i, key := range keys {
+		if err := tree.Insert(
+			key,
+			storage.RecordID{
+				PageID: storage.PageID(i + 1),
+				SlotID: uint16(i),
+			},
+		); err != nil {
+			pager.Close()
+			t.Fatal(err)
+		}
+	}
+
+	if err := tree.Delete(30); err != nil {
+		pager.Close()
+		t.Fatal(err)
+	}
+
+	_, found, err := tree.Search(30)
+	if err != nil {
+		pager.Close()
+		t.Fatal(err)
+	}
+
+	if found {
+		pager.Close()
+		t.Fatalf("expected key 30 to be deleted")
+	}
+
+	if err := tree.Validate(); err != nil {
+		pager.Close()
+		t.Fatalf(
+			"tree validation failed after left redistribution: %v",
+			err,
+		)
+	}
+
+	if err := pager.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPersistentBTreeDeleteMerge(t *testing.T) {
+	filename := "test_persistent_btree_delete_merge.db"
+
+	defer os.Remove(filename)
+
+	pager, err := storage.NewPager(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tree, err := NewPersistentBTree(pager)
+	if err != nil {
+		pager.Close()
+		t.Fatal(err)
+	}
+
+	for i := 1; i <= 4; i++ {
+		key := Key(i * 10)
+
+		if err := tree.Insert(
+			key,
+			storage.RecordID{
+				PageID: storage.PageID(i),
+				SlotID: uint16(i),
+			},
+		); err != nil {
+			pager.Close()
+			t.Fatal(err)
+		}
+	}
+
+	if err := tree.Delete(20); err != nil {
+		pager.Close()
+		t.Fatal(err)
+	}
+
+	root, err := tree.Root()
+	if err != nil {
+		pager.Close()
+		t.Fatal(err)
+	}
+
+	if root.Type != LeafNode {
+		pager.Close()
+		t.Fatalf(
+			"expected root to collapse into a leaf, got %v",
+			root.Type,
+		)
+	}
+
+	expected := []Key{10, 30, 40}
+
+	if len(root.Keys) != len(expected) {
+		pager.Close()
+		t.Fatalf(
+			"expected %d keys, got %d",
+			len(expected),
+			len(root.Keys),
+		)
+	}
+
+	for i := range expected {
+		if root.Keys[i] != expected[i] {
+			pager.Close()
+			t.Fatalf(
+				"expected key %d at index %d, got %d",
+				expected[i],
+				i,
+				root.Keys[i],
+			)
+		}
+	}
+
+	if err := tree.Validate(); err != nil {
+		pager.Close()
+		t.Fatalf(
+			"tree validation failed after merge: %v",
+			err,
+		)
+	}
+
+	if err := pager.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPersistentBTreeDeleteAll(t *testing.T) {
+	filename := "test_persistent_btree_delete_all.db"
+
+	defer os.Remove(filename)
+
+	pager, err := storage.NewPager(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tree, err := NewPersistentBTree(pager)
+	if err != nil {
+		pager.Close()
+		t.Fatal(err)
+	}
+
+	const count = 50
+
+	for i := 1; i <= count; i++ {
+		key := Key(i)
+
+		if err := tree.Insert(
+			key,
+			storage.RecordID{
+				PageID: storage.PageID(i),
+				SlotID: uint16(i),
+			},
+		); err != nil {
+			pager.Close()
+			t.Fatal(err)
+		}
+	}
+
+	for i := 1; i <= count; i++ {
+		key := Key(i)
+
+		if err := tree.Delete(key); err != nil {
+			pager.Close()
+			t.Fatalf(
+				"failed to delete key %d: %v",
+				key,
+				err,
+			)
+		}
+
+		_, found, err := tree.Search(key)
+		if err != nil {
+			pager.Close()
+			t.Fatal(err)
+		}
+
+		if found {
+			pager.Close()
+			t.Fatalf(
+				"key %d still found after deletion",
+				key,
+			)
+		}
+
+		if err := tree.Validate(); err != nil {
+			pager.Close()
+			t.Fatalf(
+				"tree validation failed after deleting %d: %v",
+				key,
+				err,
+			)
+		}
+	}
+
+	root, err := tree.Root()
+	if err != nil {
+		pager.Close()
+		t.Fatal(err)
+	}
+
+	if root.Type != LeafNode {
+		pager.Close()
+		t.Fatalf(
+			"expected final root to be a leaf, got %v",
+			root.Type,
+		)
+	}
+
+	if len(root.Keys) != 0 {
+		pager.Close()
+		t.Fatalf(
+			"expected final root to be empty, got %d keys",
+			len(root.Keys),
+		)
+	}
+
+	if err := pager.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPersistentBTreeDeleteMissingKey(t *testing.T) {
+	filename := "test_persistent_btree_delete_missing.db"
+
+	defer os.Remove(filename)
+
+	pager, err := storage.NewPager(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tree, err := NewPersistentBTree(pager)
+	if err != nil {
+		pager.Close()
+		t.Fatal(err)
+	}
+
+	for i := 1; i <= 5; i++ {
+		key := Key(i * 10)
+
+		if err := tree.Insert(
+			key,
+			storage.RecordID{
+				PageID: storage.PageID(i),
+				SlotID: uint16(i),
+			},
+		); err != nil {
+			pager.Close()
+			t.Fatal(err)
+		}
+	}
+
+	if err := tree.Delete(999); err != nil {
+		pager.Close()
+		t.Fatal(err)
+	}
+
+	for _, key := range []Key{10, 20, 30, 40, 50} {
+		_, found, err := tree.Search(key)
+		if err != nil {
+			pager.Close()
+			t.Fatal(err)
+		}
+
+		if !found {
+			pager.Close()
+			t.Fatalf(
+				"key %d disappeared after deleting missing key",
+				key,
+			)
+		}
+	}
+
+	if err := tree.Validate(); err != nil {
+		pager.Close()
+		t.Fatalf(
+			"tree validation failed: %v",
+			err,
+		)
 	}
 
 	if err := pager.Close(); err != nil {
