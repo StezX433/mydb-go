@@ -7,29 +7,35 @@ import (
 	"mydb-go/internal/storage"
 )
 
+func printTree(node *index.Node, level int) {
+	fmt.Printf("Level %d: %v\n", level, node.Keys)
+
+	for _, child := range node.Children {
+		printTree(child, level+1)
+	}
+}
+
 func main() {
 	tree := index.NewBTree()
 
-	tree.Insert(10, storage.RecordID{PageID: 1, SlotID: 0})
-	tree.Insert(20, storage.RecordID{PageID: 1, SlotID: 1})
-	tree.Insert(30, storage.RecordID{PageID: 1, SlotID: 2})
-	tree.Insert(40, storage.RecordID{PageID: 1, SlotID: 3})
-	tree.Insert(50, storage.RecordID{PageID: 1, SlotID: 4})
-
-	fmt.Println("Root type:", tree.Root.Type)
-	fmt.Println("Root keys:", tree.Root.Keys)
-	fmt.Println("Number of children:", len(tree.Root.Children))
-
-	for i, child := range tree.Root.Children {
-		fmt.Println("Child", i, "keys:", child.Keys)
+	for i := 1; i <= 30; i++ {
+		tree.Insert(
+			index.Key(i*10),
+			storage.RecordID{
+				PageID: 1,
+				SlotID: uint16(i),
+			},
+		)
 	}
 
-	rid, found := tree.Search(40)
+	printTree(tree.Root, 0)
 
-	fmt.Println("Search 40:", found)
+	rid, found := tree.Search(250)
+
+	fmt.Println("Search 250:", found)
 	fmt.Println("RecordID:", rid)
 
-	_, found = tree.Search(100)
+	_, found = tree.Search(999)
 
-	fmt.Println("Search 100:", found)
+	fmt.Println("Search 999:", found)
 }
